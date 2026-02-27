@@ -1,26 +1,35 @@
-import assert from "node:assert";
-import { generate } from "csv-generate";
-import { parse } from "csv-parse";
+import { parse } from 'csv-parse'
+import { createReadStream } from 'node:fs'
+import { resolve, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-(async () => {
-  // Initialise the parser by generating random records
-  const parser = generate({
-    high_water_mark: 64 * 64,
-    length: 100,
-  }).pipe(parse());
-  // Initialise count
-  let count = 0;
-  // Report start
-  process.stdout.write("start\n");
-  // Iterate through each records
-  for await (const record of parser) {
-    // Report current line
-    process.stdout.write(`${count++} ${record.join(",")}\n`);
-    // Fake asynchronous operation
-    await new Promise((resolve) => setTimeout(resolve, 100));
+const __dirname = dirname(fileURLToPath(import.meta.url))
+
+const csvPath = resolve(__dirname, 'tasks.csv')
+
+async function run() {
+  const parser = createReadStream(csvPath).pipe(
+    parse({
+      delimiter: ',',
+      from_line: 2, // pula o cabeçalho automaticamente
+    })
+  )
+
+  for await (const line of parser) {
+    const [title, description] = line
+
+    await fetch('http://localhost:3333/tasks', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ title, description }),
+    })
+
+    console.log(`Task criada: ${title}`)
   }
-  // Report end
-  process.stdout.write("...done\n");
-  // Validation
-  assert.strictEqual(count, 100);
-})();
+
+  console.log('Importação concluída!')
+}
+
+run()
